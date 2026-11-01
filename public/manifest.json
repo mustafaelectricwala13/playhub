@@ -1,0 +1,18 @@
+{
+  "name": "PLAYHUB – Free Online Arcade Mini-Games",
+  "short_name": "PLAYHUB",
+  "description": "Play hyper-addictive 3D and 2D arcade mini-games instantly in your browser.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0B0F19",
+  "theme_color": "#4F46E5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
