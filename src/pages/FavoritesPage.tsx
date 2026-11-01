@@ -56,3 +56,4 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
     </div>
   );
 };
+

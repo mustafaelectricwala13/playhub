@@ -122,3 +122,4 @@ export const supabaseService = {
     return ranked;
   }
 };
+

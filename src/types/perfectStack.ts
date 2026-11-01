@@ -33,3 +33,4 @@ export interface BlockSkin {
   directionalColor: number;
   bgGradient: [string, string];
 }
+

@@ -277,3 +277,4 @@ export const GameDetailPage: React.FC<GameDetailPageProps> = ({
     </div>
   );
 };
+

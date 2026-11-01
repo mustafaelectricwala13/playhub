@@ -162,3 +162,4 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
     </div>
   );
 };
+

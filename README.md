@@ -105,3 +105,4 @@ npm run build
 2. Import repository in [vercel.com/new](https://vercel.com/new).
 3. Framework preset: **Vite** (auto-detected).
 4. Click **Deploy**!
+

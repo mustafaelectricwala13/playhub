@@ -10,12 +10,10 @@ import {
   Volume2, 
   VolumeX, 
   Sparkles, 
-  Share2, 
   MessageCircle, 
   Trophy, 
   Tv, 
   Pause, 
-  ChevronRight,
   Flame
 } from 'lucide-react';
 
@@ -98,6 +96,25 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
     };
   }, [onScoreUpdate, onCoinsEarned]);
 
+  const handleStart = () => {
+    setScore(0);
+    setCombo(0);
+    setCoins(0);
+    setIsNewHigh(false);
+    setGameState('playing');
+    engineRef.current?.start();
+  };
+
+  const handlePause = () => {
+    setGameState('paused');
+    engineRef.current?.pause();
+  };
+
+  const handleResume = () => {
+    setGameState('playing');
+    engineRef.current?.resume();
+  };
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -110,11 +127,9 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
         }
       } else if (e.code === 'Escape' || e.key === 'p' || e.key === 'P') {
         if (gameState === 'playing') {
-          setGameState('paused');
-          engineRef.current?.stop();
+          handlePause();
         } else if (gameState === 'paused') {
-          setGameState('playing');
-          engineRef.current?.start();
+          handleResume();
         }
       }
     };
@@ -123,19 +138,12 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameState]);
 
-  const handleStart = () => {
-    setScore(0);
-    setCombo(0);
-    setCoins(0);
-    setIsNewHigh(false);
-    setGameState('playing');
-    engineRef.current?.start();
-  };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const handleTapAction = (e: React.PointerEvent) => {
     e.preventDefault();
     if (gameState === 'playing' && engineRef.current) {
       engineRef.current.handlePlace();
+    } else if (gameState === 'idle') {
+      handleStart();
     }
   };
 
@@ -152,23 +160,23 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
   };
 
   const handleWatchRewardedAd = () => {
-    // Rewarded Ad Simulation / Hook ready for AdSense / Poki / GameDistribution
     soundManager.playCoin();
     setRewardedAdAvailable(false);
-    // Give player bonus 50 coins
     const stats = storageService.getUserStats();
     stats.totalCoins += 50;
     storageService.saveUserStats(stats);
-    alert('Rewarded Ad watched! +50 bonus coins added to your wallet.');
+    alert('Rewarded Ad watched! +50 bonus gems added to your wallet.');
   };
 
   return (
-    <div className="relative w-full h-[620px] max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl select-none bg-gradient-to-b from-indigo-950 via-slate-900 to-slate-950 border border-white/10 flex items-center justify-center">
+    <div 
+      onPointerDown={handleTapAction}
+      className="relative w-full h-[620px] max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl select-none bg-gradient-to-b from-indigo-950 via-slate-900 to-slate-950 border border-white/10 flex items-center justify-center cursor-pointer touch-none"
+    >
       {/* 3D Three.js Container */}
       <div
         ref={containerRef}
-        onPointerDown={handlePointerDown}
-        className="w-full h-full cursor-pointer touch-none"
+        className="w-full h-full pointer-events-none"
       />
 
       {/* Top HUD (during play) */}
@@ -204,9 +212,9 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-white/40" />}
             </button>
             <button
-              onClick={() => {
-                setGameState('paused');
-                engineRef.current?.stop();
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePause();
               }}
               className="w-9 h-9 rounded-full bg-slate-900/80 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white"
             >
@@ -218,7 +226,10 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
 
       {/* Start / Idle Screen */}
       {gameState === 'idle' && (
-        <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
+        <div 
+          onClick={handleStart}
+          className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20 cursor-pointer"
+        >
           <div className="flex flex-col items-center gap-4 max-w-sm">
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-1 shadow-[0_0_40px_rgba(99,102,241,0.6)] animate-float">
               <div className="w-full h-full bg-slate-950 rounded-[22px] flex items-center justify-center">
@@ -231,7 +242,7 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
                 PERFECT STACK
               </h2>
               <p className="text-sm font-display text-slate-300 mt-1">
-                Tap to drop 3D blocks. Slice overhangs & stack to infinity!
+                Tap anywhere to drop 3D blocks. Slice overhangs & stack to infinity!
               </p>
             </div>
 
@@ -244,7 +255,10 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
             </div>
 
             <button
-              onClick={handleStart}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStart();
+              }}
               className="w-full py-4 px-8 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-arcade text-lg font-black tracking-widest shadow-[0_0_30px_rgba(99,102,241,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
             >
               <Play className="w-6 h-6 fill-current" />
@@ -259,7 +273,10 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
 
       {/* Game Over Screen */}
       {gameState === 'gameover' && (
-        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 animate-fade-in">
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 animate-fade-in"
+        >
           <div className="flex flex-col items-center gap-4 max-w-sm w-full">
             <div>
               <span className="text-xs font-arcade text-pink-500 font-black tracking-widest block uppercase">
@@ -297,7 +314,10 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
             {/* Actions */}
             <div className="flex flex-col gap-2 w-full">
               <button
-                onClick={handleStart}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStart();
+                }}
                 className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-500 to-pink-500 text-white font-arcade text-base font-black tracking-wider shadow-[0_0_25px_rgba(99,102,241,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <RotateCcw className="w-5 h-5 stroke-[2.5]" />
@@ -305,7 +325,10 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
               </button>
 
               <button
-                onClick={handleShareWhatsApp}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleShareWhatsApp();
+                }}
                 className="w-full py-2.5 px-4 rounded-xl bg-[#25D366] text-white font-arcade text-xs font-black tracking-wider shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-4 h-4 fill-current" />
@@ -314,7 +337,10 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
 
               {rewardedAdAvailable && (
                 <button
-                  onClick={handleWatchRewardedAd}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleWatchRewardedAd();
+                  }}
                   className="w-full py-2 px-3 rounded-xl bg-slate-800/80 border border-amber-500/40 text-amber-300 font-arcade text-[11px] font-bold hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   <Tv className="w-4 h-4" />
@@ -328,14 +354,14 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
 
       {/* Paused Overlay */}
       {gameState === 'paused' && (
-        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-20">
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-20"
+        >
           <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-xs w-full text-center flex flex-col gap-4 shadow-2xl">
             <h3 className="font-arcade text-2xl font-black text-white">PAUSED</h3>
             <button
-              onClick={() => {
-                setGameState('playing');
-                engineRef.current?.start();
-              }}
+              onClick={handleResume}
               className="py-3 px-6 rounded-xl bg-indigo-600 text-white font-arcade text-sm font-bold active:scale-95 transition-all"
             >
               RESUME

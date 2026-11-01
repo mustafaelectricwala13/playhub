@@ -51,3 +51,4 @@ export const GameRenderer: React.FC<GameRendererProps> = ({
     </div>
   );
 };
+

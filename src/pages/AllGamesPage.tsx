@@ -134,3 +134,4 @@ export const AllGamesPage: React.FC<AllGamesPageProps> = ({
     </div>
   );
 };
+

@@ -132,3 +132,4 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     </div>
   );
 };
+

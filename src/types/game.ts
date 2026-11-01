@@ -41,3 +41,4 @@ export interface LeaderboardEntry {
   date: string;
   isCurrentUser?: boolean;
 }
+
