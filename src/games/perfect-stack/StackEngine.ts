@@ -353,8 +353,9 @@ export class StackEngine {
 
     // 2. Partial Overlap
     const overlap = sizeOnAxis - absDelta;
+    const minOverlap = 0.22; // Below this threshold, block is too thin to stand and topples
 
-    if (overlap > 0) {
+    if (overlap > minOverlap) {
       // Successful placement with slice
       this.combo = 0;
       this.callbacks.onComboUpdate(0);
@@ -425,34 +426,36 @@ export class StackEngine {
       return true;
     }
 
-    // 3. Complete Miss -> Game Over
+    // 3. Complete Miss or Too Thin -> Game Over
     this.handleCompleteMiss();
     return false;
   }
 
   private handleCompleteMiss() {
+    if (this.isGameOver) return;
     this.isGameOver = true;
     soundManager.playGameOver();
 
     // The whole block tumbles and falls
     if (this.currentBlock) {
       const isX = this.movingAxis === 'x';
-      const push = this.direction * 2.0;
+      const push = this.direction * 2.2;
       this.fallingPieces.push({
         mesh: this.currentBlock,
         vx: isX ? push : 0,
-        vy: 0.5,
+        vy: 0.8,
         vz: isX ? 0 : push,
-        rotX: isX ? 0 : this.direction * 4,
-        rotZ: isX ? -this.direction * 4 : 0
+        rotX: isX ? 0 : this.direction * 5,
+        rotZ: isX ? -this.direction * 5 : 0
       });
       this.currentBlock = null;
     }
 
+    // Snappy prompt Game Over transition
     setTimeout(() => {
       this.isRunning = false;
       this.callbacks.onGameOver(this.score, this.coinsEarned);
-    }, 600);
+    }, 250);
   }
 
   private loop = (time: number) => {

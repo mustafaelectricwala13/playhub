@@ -37,6 +37,7 @@ export class GameEngine {
   // Game state
   private isRunning: boolean = false;
   private isPaused: boolean = false;
+  private isDying: boolean = false;
   private animFrameId: number | null = null;
   private lastTime: number = 0;
 
@@ -178,6 +179,7 @@ export class GameEngine {
     this.screenShake = 0;
     this.flashAlpha = 0;
     this.challengeBeatenAlerted = false;
+    this.isDying = false;
 
     this.player.x = this.virtualWidth / 2;
     this.player.y = 560;
@@ -260,6 +262,17 @@ export class GameEngine {
   };
 
   private update(dt: number) {
+    if (this.isDying) {
+      this.particles.update(dt);
+      if (this.screenShake > 0) {
+        this.screenShake = Math.max(0, this.screenShake - dt * 25);
+      }
+      if (this.flashAlpha > 0) {
+        this.flashAlpha = Math.max(0, this.flashAlpha - dt * 4);
+      }
+      return;
+    }
+
     // Check slow-mo power-up
     const hasSlowMo = this.activePowerUps.has('slowmo');
     const timeScale = hasSlowMo ? 0.55 : 1.0;
@@ -558,16 +571,19 @@ export class GameEngine {
   }
 
   private handleDeath() {
-    this.isRunning = false;
+    if (this.isDying) return;
+    this.isDying = true;
     soundManager.playCollision();
-    this.triggerScreenShake(20);
-    this.triggerFlash('#FF0055', 0.8);
+    this.triggerScreenShake(22);
+    this.triggerFlash('#FF0055', 0.85);
     this.particles.emitExplosion(this.player.x, this.player.y, this.currentSkin.glowColor);
 
-    // Trigger instant gameover callback
+    // Fast & responsive game over trigger
     setTimeout(() => {
+      this.isRunning = false;
+      this.isDying = false;
       this.callbacks.onGameOver(this.score, this.coinsEarned, this.nearMissCount);
-    }, 450);
+    }, 220);
   }
 
   private triggerScreenShake(magnitude: number) {
