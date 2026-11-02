@@ -42,6 +42,10 @@ export const GameDetailPage: React.FC<GameDetailPageProps> = ({
   const [copied, setCopied] = useState(false);
   const [personalBest, setPersonalBest] = useState(0);
 
+  const handleScoreUpdate = React.useCallback((s: number) => {
+    setPersonalBest((prev) => (s > prev ? s : prev));
+  }, []);
+
   const game = games.find((g) => g.slug === slug);
 
   useEffect(() => {
@@ -164,11 +168,7 @@ export const GameDetailPage: React.FC<GameDetailPageProps> = ({
           <div className="w-full">
             <GameRenderer
               game={game}
-              onScoreUpdate={(s) => {
-                if (s > personalBest) {
-                  setPersonalBest(s);
-                }
-              }}
+              onScoreUpdate={handleScoreUpdate}
             />
           </div>
 

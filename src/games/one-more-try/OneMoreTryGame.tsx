@@ -64,6 +64,13 @@ export const OneMoreTryGame: React.FC<OneMoreTryGameProps> = ({
   const [isNewHigh, setIsNewHigh] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
 
+  // Callback refs to prevent re-instantiating the engine on prop changes
+  const onScoreUpdateRef = useRef(onScoreUpdate);
+  onScoreUpdateRef.current = onScoreUpdate;
+
+  const onCoinsEarnedRef = useRef(onCoinsEarned);
+  onCoinsEarnedRef.current = onCoinsEarned;
+
   useEffect(() => {
     const stats = storageService.getUserStats();
     setHighScore(stats.highScores['one-more-try'] || 0);
@@ -79,11 +86,11 @@ export const OneMoreTryGame: React.FC<OneMoreTryGameProps> = ({
       {
         onScoreUpdate: (s) => {
           setScore(s);
-          if (onScoreUpdate) onScoreUpdate(s);
+          onScoreUpdateRef.current?.(s);
         },
         onCoinUpdate: (c) => {
           setCoins(c);
-          if (onCoinsEarned) onCoinsEarned(c);
+          onCoinsEarnedRef.current?.(c);
         },
         onComboUpdate: (cb) => setCombo(cb),
         onPowerUpUpdate: (pu) => setActivePowerUps(pu),
@@ -125,7 +132,7 @@ export const OneMoreTryGame: React.FC<OneMoreTryGameProps> = ({
       window.removeEventListener('resize', handleResize);
       engine.stop();
     };
-  }, [onScoreUpdate, onCoinsEarned]);
+  }, []);
 
   // Keyboard controls
   useEffect(() => {

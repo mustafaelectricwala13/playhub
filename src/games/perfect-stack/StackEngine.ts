@@ -32,8 +32,10 @@ export class StackEngine {
   private callbacks: StackEngineCallbacks;
 
   // Game dimensions
-  private readonly blockHeight = 0.55;
-  private readonly initialSize = 3.0;
+  private readonly blockHeight = 0.52;
+  private readonly initialSize = 2.8;
+  private readonly spawnDist = 3.6;
+  private readonly bound = 3.6;
 
   // Stacking state
   private stack: THREE.Mesh[] = [];
@@ -44,12 +46,14 @@ export class StackEngine {
   // Motion properties
   private movingAxis: 'x' | 'z' = 'x';
   private direction: number = 1;
-  private speed: number = 3.6;
+  private speed: number = 3.2;
   private prevPosition = { x: 0, z: 0 };
-  private prevSize = { width: 3.0, depth: 3.0 };
+  private prevSize = { width: 2.8, depth: 2.8 };
 
   // Camera tracking
+  private cameraX: number = 0;
   private cameraY: number = 0;
+  private cameraZ: number = 0;
 
   // Gameplay
   private score: number = 0;
@@ -59,11 +63,13 @@ export class StackEngine {
   private isGameOver: boolean = false;
   private animFrameId: number | null = null;
   private lastTime: number = 0;
+  private canPlaceTime: number = 0;
 
   // Lighting & Materials
   private baseHue: number = 200;
   private dirLight!: THREE.DirectionalLight;
   private ambientLight!: THREE.AmbientLight;
+  private hemiLight!: THREE.HemisphereLight;
 
   constructor(container: HTMLElement, callbacks: StackEngineCallbacks) {
     this.container = container;
@@ -72,16 +78,23 @@ export class StackEngine {
     // Scene
     this.scene = new THREE.Scene();
 
-    // Camera (Isometric Orthographic)
+    // Responsive Orthographic Camera Setup
     const width = Math.max(container.clientWidth, 300);
     const height = Math.max(container.clientHeight, 400);
     const aspect = width / height;
-    const d = 4.2;
+
+    let hView = 6.6;
+    let vView = hView / aspect;
+    if (aspect > 1) {
+      vView = 6.6;
+      hView = vView * aspect;
+    }
+
     this.camera = new THREE.OrthographicCamera(
-      -d * aspect,
-      d * aspect,
-      d,
-      -d,
+      -hView / 2,
+      hView / 2,
+      vView / 2,
+      -vView / 2,
       0.1,
       1000
     );
@@ -104,10 +117,13 @@ export class StackEngine {
   }
 
   private setupLighting() {
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
     this.scene.add(this.ambientLight);
 
-    this.dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e1b4b, 0.45);
+    this.scene.add(this.hemiLight);
+
+    this.dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
     this.dirLight.position.set(6, 12, 8);
     this.dirLight.castShadow = true;
     this.dirLight.shadow.mapSize.width = 1024;
@@ -125,7 +141,7 @@ export class StackEngine {
 
   private getBlockColor(level: number): THREE.Color {
     // Smooth harmonious HSL color progression
-    const hue = (this.baseHue + level * 6.5) % 360;
+    const hue = (this.baseHue + level * 6.8) % 360;
     const color = new THREE.Color();
     color.setHSL(hue / 360, 0.85, 0.55);
     return color;
@@ -138,12 +154,17 @@ export class StackEngine {
     if (width === 0 || height === 0) return;
 
     const aspect = width / height;
-    const d = 4.2;
+    let hView = 6.6;
+    let vView = hView / aspect;
+    if (aspect > 1) {
+      vView = 6.6;
+      hView = vView * aspect;
+    }
 
-    this.camera.left = -d * aspect;
-    this.camera.right = d * aspect;
-    this.camera.top = d;
-    this.camera.bottom = -d;
+    this.camera.left = -hView / 2;
+    this.camera.right = hView / 2;
+    this.camera.top = vView / 2;
+    this.camera.bottom = -vView / 2;
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(width, height);
@@ -151,16 +172,20 @@ export class StackEngine {
   }
 
   public reset() {
-    // Clear old meshes
+    // Clear old meshes safely
     for (const mesh of this.stack) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      if (mesh.material instanceof THREE.Material) {
+        mesh.material.dispose();
+      }
     }
     for (const p of this.fallingPieces) {
       this.scene.remove(p.mesh);
       p.mesh.geometry.dispose();
-      (p.mesh.material as THREE.Material).dispose();
+      if (p.mesh.material instanceof THREE.Material) {
+        p.mesh.material.dispose();
+      }
     }
     for (const p of this.perfectPulses) {
       this.scene.remove(p.mesh);
@@ -170,7 +195,9 @@ export class StackEngine {
     if (this.currentBlock) {
       this.scene.remove(this.currentBlock);
       this.currentBlock.geometry.dispose();
-      (this.currentBlock.material as THREE.Material).dispose();
+      if (this.currentBlock.material instanceof THREE.Material) {
+        this.currentBlock.material.dispose();
+      }
       this.currentBlock = null;
     }
 
@@ -181,14 +208,16 @@ export class StackEngine {
     this.combo = 0;
     this.coinsEarned = 0;
     this.isGameOver = false;
-    this.speed = 3.6;
+    this.speed = 3.2;
     this.baseHue = Math.floor(Math.random() * 360);
 
     this.prevPosition = { x: 0, z: 0 };
     this.prevSize = { width: this.initialSize, depth: this.initialSize };
 
     // Reset camera position
+    this.cameraX = 0;
     this.cameraY = 0;
+    this.cameraZ = 0;
     this.camera.position.set(5, 6, 5);
     this.camera.lookAt(0, 0, 0);
 
@@ -218,6 +247,7 @@ export class StackEngine {
     this.stop(); // Ensure any existing loop is canceled
     this.reset();
     this.isRunning = true;
+    this.canPlaceTime = performance.now() + 220; // 220ms grace period on game start
     this.lastTime = performance.now();
     this.loop(performance.now());
   }
@@ -233,6 +263,7 @@ export class StackEngine {
   public resume() {
     if (!this.isGameOver && !this.isRunning) {
       this.isRunning = true;
+      this.canPlaceTime = performance.now() + 150;
       this.lastTime = performance.now();
       this.loop(performance.now());
     }
@@ -268,13 +299,12 @@ export class StackEngine {
     this.currentBlock.receiveShadow = true;
 
     const posY = level * this.blockHeight;
-    const spawnDist = 4.2;
 
     // Position relative to current tower center so motion is always symmetrical
     if (this.movingAxis === 'x') {
-      this.currentBlock.position.set(this.prevPosition.x - spawnDist, posY, this.prevPosition.z);
+      this.currentBlock.position.set(this.prevPosition.x - this.spawnDist, posY, this.prevPosition.z);
     } else {
-      this.currentBlock.position.set(this.prevPosition.x, posY, this.prevPosition.z - spawnDist);
+      this.currentBlock.position.set(this.prevPosition.x, posY, this.prevPosition.z - this.spawnDist);
     }
 
     this.scene.add(this.currentBlock);
@@ -304,6 +334,7 @@ export class StackEngine {
    */
   public handlePlace(): boolean {
     if (!this.isRunning || this.isGameOver || !this.currentBlock) return false;
+    if (performance.now() < this.canPlaceTime) return false; // Prevent accidental double-tap jitter
 
     const cur = this.currentBlock;
     const curPos = cur.position;
@@ -313,7 +344,7 @@ export class StackEngine {
     const absDelta = Math.abs(delta);
 
     // 1. Perfect Alignment Check (generous rewarding threshold)
-    const perfectThreshold = 0.16;
+    const perfectThreshold = 0.14;
 
     if (absDelta <= perfectThreshold) {
       // Snaps to perfect position
@@ -327,6 +358,13 @@ export class StackEngine {
       const bonus = 1 + this.combo;
       this.score += bonus;
       this.coinsEarned += 2;
+
+      // Bonus size recovery reward for precision streaks!
+      if (this.combo >= 5) {
+        this.prevSize.width = Math.min(this.initialSize, this.prevSize.width + 0.12);
+        this.prevSize.depth = Math.min(this.initialSize, this.prevSize.depth + 0.12);
+        soundManager.playPowerUp();
+      }
 
       soundManager.playPerfect(this.combo);
       this.triggerPerfectPulse(
@@ -345,15 +383,16 @@ export class StackEngine {
       this.stack.push(cur);
       this.currentBlock = null;
 
-      // Speed progression
-      this.speed = Math.min(6.5, 3.6 + this.score * 0.04);
+      // Speed progression & placement cooldown
+      this.canPlaceTime = performance.now() + 160;
+      this.speed = Math.min(6.2, 3.2 + this.score * 0.045);
       this.spawnNextBlock();
       return true;
     }
 
     // 2. Partial Overlap
     const overlap = sizeOnAxis - absDelta;
-    const minOverlap = 0.22; // Below this threshold, block is too thin to stand and topples
+    const minOverlap = 0.18; // Below this threshold, block is too thin to stand and topples
 
     if (overlap > minOverlap) {
       // Successful placement with slice
@@ -387,7 +426,7 @@ export class StackEngine {
       this.scene.add(placedMesh);
       this.stack.push(placedMesh);
 
-      // Create falling cut piece
+      // Create falling cut piece with independent cloned material
       const cutSize = absDelta;
       const cutWidth = isX ? cutSize : newWidth;
       const cutDepth = isX ? newDepth : cutSize;
@@ -400,7 +439,8 @@ export class StackEngine {
         : newCenterZ + (delta > 0 ? cutOffset : -cutOffset);
 
       const cutGeo = new THREE.BoxGeometry(cutWidth, this.blockHeight, cutDepth);
-      const cutMesh = new THREE.Mesh(cutGeo, cur.material);
+      const cutMat = (cur.material as THREE.MeshStandardMaterial).clone();
+      const cutMesh = new THREE.Mesh(cutGeo, cutMat);
       cutMesh.position.set(cutCenterX, curPos.y, cutCenterZ);
       cutMesh.castShadow = true;
       this.scene.add(cutMesh);
@@ -420,8 +460,9 @@ export class StackEngine {
       this.prevSize = { width: newWidth, depth: newDepth };
       this.currentBlock = null;
 
-      // Speed progression
-      this.speed = Math.min(6.5, 3.6 + this.score * 0.04);
+      // Speed progression & placement cooldown
+      this.canPlaceTime = performance.now() + 160;
+      this.speed = Math.min(6.2, 3.2 + this.score * 0.045);
       this.spawnNextBlock();
       return true;
     }
@@ -436,7 +477,7 @@ export class StackEngine {
     this.isGameOver = true;
     soundManager.playGameOver();
 
-    // The whole block tumbles and falls
+    // The whole block tumbles and falls into the abyss
     if (this.currentBlock) {
       const isX = this.movingAxis === 'x';
       const push = this.direction * 2.2;
@@ -455,7 +496,7 @@ export class StackEngine {
     setTimeout(() => {
       this.isRunning = false;
       this.callbacks.onGameOver(this.score, this.coinsEarned);
-    }, 250);
+    }, 220);
   }
 
   private loop = (time: number) => {
@@ -473,13 +514,12 @@ export class StackEngine {
   private update(dt: number) {
     // 1. Move active block symmetrically around prevPosition
     if (this.currentBlock && !this.isGameOver) {
-      const bound = 4.2;
       const deltaMove = this.direction * this.speed * dt;
 
       if (this.movingAxis === 'x') {
         this.currentBlock.position.x += deltaMove;
-        const minX = this.prevPosition.x - bound;
-        const maxX = this.prevPosition.x + bound;
+        const minX = this.prevPosition.x - this.bound;
+        const maxX = this.prevPosition.x + this.bound;
         if (this.currentBlock.position.x >= maxX) {
           this.currentBlock.position.x = maxX;
           this.direction = -1;
@@ -489,8 +529,8 @@ export class StackEngine {
         }
       } else {
         this.currentBlock.position.z += deltaMove;
-        const minZ = this.prevPosition.z - bound;
-        const maxZ = this.prevPosition.z + bound;
+        const minZ = this.prevPosition.z - this.bound;
+        const maxZ = this.prevPosition.z + this.bound;
         if (this.currentBlock.position.z >= maxZ) {
           this.currentBlock.position.z = maxZ;
           this.direction = -1;
@@ -516,6 +556,9 @@ export class StackEngine {
       if (p.mesh.position.y < this.cameraY - 12) {
         this.scene.remove(p.mesh);
         p.mesh.geometry.dispose();
+        if (p.mesh.material instanceof THREE.Material) {
+          p.mesh.material.dispose();
+        }
         this.fallingPieces.splice(i, 1);
       }
     }
@@ -536,16 +579,21 @@ export class StackEngine {
       }
     }
 
-    // 4. Smooth Camera Tracking: camera follows stack seamlessly maintaining exact 45° isometric view
+    // 4. Smooth Camera Tracking in X, Y, and Z
     const targetY = (this.stack.length - 1) * this.blockHeight;
+    const targetX = this.prevPosition.x;
+    const targetZ = this.prevPosition.z;
+
     this.cameraY += (targetY - this.cameraY) * 4.5 * dt;
+    this.cameraX += (targetX - this.cameraX) * 4.5 * dt;
+    this.cameraZ += (targetZ - this.cameraZ) * 4.5 * dt;
 
-    this.camera.position.set(5, this.cameraY + 6, 5);
-    this.camera.lookAt(0, this.cameraY, 0);
+    this.camera.position.set(this.cameraX + 5, this.cameraY + 6, this.cameraZ + 5);
+    this.camera.lookAt(this.cameraX, this.cameraY, this.cameraZ);
 
-    // Keep light and shadow camera centered around the current tower height
-    this.dirLight.position.set(6, this.cameraY + 12, 8);
-    this.dirLight.target.position.set(0, this.cameraY, 0);
+    // Keep light and shadow camera centered around the current tower center
+    this.dirLight.position.set(this.cameraX + 6, this.cameraY + 12, this.cameraZ + 8);
+    this.dirLight.target.position.set(this.cameraX, this.cameraY, this.cameraZ);
     this.dirLight.target.updateMatrixWorld();
   }
 

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { StackEngine } from './StackEngine';
 import { soundManager } from '../../audio/soundManager';
@@ -39,25 +39,32 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
   const [rewardedAdAvailable, setRewardedAdAvailable] = useState(true);
 
+  // Callback refs to prevent re-instantiating the engine on prop changes
+  const onScoreUpdateRef = useRef(onScoreUpdate);
+  onScoreUpdateRef.current = onScoreUpdate;
+
+  const onCoinsEarnedRef = useRef(onCoinsEarned);
+  onCoinsEarnedRef.current = onCoinsEarned;
+
   // Load High Score on mount
   useEffect(() => {
     const stats = storageService.getUserStats();
     setHighScore(stats.highScores['perfect-stack'] || 0);
   }, []);
 
-  // Initialize Engine
+  // Initialize Engine (Mounts ONCE)
   useEffect(() => {
     if (!containerRef.current) return;
 
     const engine = new StackEngine(containerRef.current, {
       onScoreUpdate: (s) => {
         setScore(s);
-        if (onScoreUpdate) onScoreUpdate(s);
+        onScoreUpdateRef.current?.(s);
       },
       onComboUpdate: (c) => setCombo(c),
       onCoinUpdate: (c) => {
         setCoins(c);
-        if (onCoinsEarned) onCoinsEarned(c);
+        onCoinsEarnedRef.current?.(c);
       },
       onGameOver: (finalScore, earnedCoins) => {
         setGameState('gameover');
@@ -90,11 +97,19 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
     const handleResize = () => engine.handleResize();
     window.addEventListener('resize', handleResize);
 
+    const ro = new ResizeObserver(() => {
+      engine.handleResize();
+    });
+    if (containerRef.current) {
+      ro.observe(containerRef.current);
+    }
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      ro.disconnect();
       engine.destroy();
     };
-  }, [onScoreUpdate, onCoinsEarned]);
+  }, []);
 
   const handleStart = () => {
     setScore(0);
@@ -142,13 +157,10 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
     if (gameState === 'playing' && engineRef.current) {
       e.preventDefault();
       engineRef.current.handlePlace();
-    } else if (gameState === 'idle') {
-      e.preventDefault();
-      handleStart();
     }
   };
 
-  const toggleSound = (e: React.MouseEvent) => {
+  const toggleSound = (e: React.MouseEvent | React.PointerEvent) => {
     e.stopPropagation();
     const next = !soundEnabled;
     setSoundEnabled(next);
@@ -207,12 +219,14 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
 
           <div className="flex items-center gap-2 pointer-events-auto">
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={toggleSound}
               className="w-9 h-9 rounded-full bg-slate-900/80 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white"
             >
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-white/40" />}
             </button>
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 handlePause();
@@ -228,10 +242,21 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
       {/* Start / Idle Screen */}
       {gameState === 'idle' && (
         <div 
-          onClick={handleStart}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            handleStart();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStart();
+          }}
           className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20 cursor-pointer"
         >
-          <div className="flex flex-col items-center gap-4 max-w-sm">
+          <div 
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            className="flex flex-col items-center gap-4 max-w-sm"
+          >
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-1 shadow-[0_0_40px_rgba(99,102,241,0.6)] animate-float">
               <div className="w-full h-full bg-slate-950 rounded-[22px] flex items-center justify-center">
                 <div className="w-9 h-9 bg-gradient-to-br from-indigo-400 to-pink-500 rounded-lg transform rotate-12 shadow-md" />
@@ -256,11 +281,16 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
             </div>
 
             <button
+              type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                handleStart();
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 handleStart();
               }}
-              className="w-full py-4 px-8 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-arcade text-lg font-black tracking-widest shadow-[0_0_30px_rgba(99,102,241,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
+              className="w-full py-4 px-8 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-arcade text-lg font-black tracking-widest shadow-[0_0_30px_rgba(99,102,241,0.6)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 cursor-pointer"
             >
               <Play className="w-6 h-6 fill-current" />
               <span>TAP TO PLAY</span>
@@ -275,10 +305,18 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
       {/* Game Over Screen */}
       {gameState === 'gameover' && (
         <div 
-          onClick={handleStart}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            handleStart();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStart();
+          }}
           className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 animate-fade-in cursor-pointer"
         >
           <div 
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             className="flex flex-col items-center gap-4 max-w-sm w-full cursor-default"
           >
@@ -327,11 +365,14 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
             <div className="flex flex-col gap-2.5 w-full mt-1">
               <button
                 type="button"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  handleStart();
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleStart();
                 }}
-                onPointerDown={(e) => e.stopPropagation()}
                 className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-red-500 via-pink-500 to-indigo-600 hover:brightness-110 active:scale-95 text-white font-arcade text-lg font-black tracking-wider shadow-[0_0_30px_rgba(239,68,68,0.6)] transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white/20"
               >
                 <RotateCcw className="w-6 h-6 stroke-[3]" />
@@ -347,11 +388,11 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
 
               <button
                 type="button"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleShareWhatsApp();
                 }}
-                onPointerDown={(e) => e.stopPropagation()}
                 className="w-full py-2.5 px-4 rounded-xl bg-[#25D366] text-white font-arcade text-xs font-black tracking-wider shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <MessageCircle className="w-4 h-4 fill-current" />
@@ -361,11 +402,11 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
               {rewardedAdAvailable && (
                 <button
                   type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleWatchRewardedAd();
                   }}
-                  onPointerDown={(e) => e.stopPropagation()}
                   className="w-full py-2 px-3 rounded-xl bg-slate-800/80 border border-amber-500/40 text-amber-300 font-arcade text-[11px] font-bold hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Tv className="w-4 h-4" />
@@ -380,20 +421,23 @@ export const PerfectStackGame: React.FC<PerfectStackGameProps> = ({
       {/* Paused Overlay */}
       {gameState === 'paused' && (
         <div 
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-20"
         >
           <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-xs w-full text-center flex flex-col gap-4 shadow-2xl">
             <h3 className="font-arcade text-2xl font-black text-white">PAUSED</h3>
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={handleResume}
-              className="py-3 px-6 rounded-xl bg-indigo-600 text-white font-arcade text-sm font-bold active:scale-95 transition-all"
+              className="py-3 px-6 rounded-xl bg-indigo-600 text-white font-arcade text-sm font-bold active:scale-95 transition-all cursor-pointer"
             >
               RESUME
             </button>
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={handleStart}
-              className="py-2.5 px-6 rounded-xl bg-slate-800 text-slate-200 font-arcade text-xs font-bold active:scale-95 transition-all"
+              className="py-2.5 px-6 rounded-xl bg-slate-800 text-slate-200 font-arcade text-xs font-bold active:scale-95 transition-all cursor-pointer"
             >
               RESTART
             </button>
